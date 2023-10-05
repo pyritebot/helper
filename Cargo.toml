@@ -1,0 +1,17 @@
+[package]
+name = "vin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+poise = "0.5.5"
+tokio = { version = "1.32.0", features = ["full"] }
+tiny_http = "0.12.0"
+serde_json = "1.0.107"
+dotenv = "0.15.0"
+
+[[bin]]
+name = "vin"
+path = "src/main.rs"
