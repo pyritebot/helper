@@ -1,5 +1,5 @@
 use crate::consts::BOT_NAME;
-use crate::serenity::{ButtonStyle, Colour};
+use crate::serenity::Colour;
 use crate::{Context, Error};
 
 /// Show the help menu. This command can be provided with an option to know more about a command.
@@ -56,16 +56,6 @@ pub async fn help(
                                 .collect::<Vec<(&str, &str, bool)>>(),
                         )
                         .footer(|footer| footer.text(BOT_NAME))
-                })
-                .components(|components| {
-                    components.create_action_row(|row| {
-                        row.create_button(|button| {
-                            button
-                                .style(ButtonStyle::Link)
-                                .url("https://angelnext.dev")
-                                .label("Bot Invite Link")
-                        })
-                    })
                 })
             })
             .await?;

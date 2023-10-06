@@ -1,11 +1,17 @@
 mod commands;
 mod consts;
 
+use axum::{
+    headers::{authorization::Bearer, Authorization},
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router, TypedHeader,
+};
+
 use dotenv::dotenv;
-use poise::serenity_prelude::{self as serenity, Activity, ChannelId, GuildId};
-use serde_json::Value;
-use std::{env::var, str::FromStr, time::Duration};
-use tiny_http::{HeaderField, Method, Response, Server};
+use poise::serenity_prelude::{self as serenity, Activity, CacheAndHttp, ChannelId, GuildId};
+use serde::Deserialize;
+use std::{env::var, sync::Arc, time::Duration};
 
 // Types used by all command functions
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -29,6 +35,11 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
             }
         }
     }
+}
+
+#[derive(Deserialize)]
+struct ReqData {
+    user: String,
 }
 
 #[tokio::main]
@@ -86,81 +97,19 @@ async fn main() {
         ..Default::default()
     };
 
-    poise::Framework::builder()
+    let framework = poise::Framework::builder()
         .token(var("DISCORD_TOKEN").expect("Missing `DISCORD_TOKEN` env var"))
         .setup(move |ctx, ready, framework| {
             Box::pin(async move {
                 println!("\x1b[1m\x1b[32mReady\x1b[0m as {}", ready.user.tag());
 
-                let server = Server::http("0.0.0.0:8000").unwrap();
-
-                for mut request in server.incoming_requests() {
-                    let url = request.url();
-
-                    let response = match url {
-                        "/" => Response::from_string("Bot hosting running correctly!"),
-                        "/vote" => {
-                            let auth_header = HeaderField::from_str("authorization");
-                            match auth_header {
-                                Ok(header) => {
-                                    let authentication =  request.headers().iter().find(|h| h.field == header);
-                                    match authentication {
-                                        Some(auth) => {
-                                            if auth.value.to_string() != var("TOPGG_AUTH").unwrap_or(String::new()) {
-                                                Response::with_status_code(Response::from_string("You're not authorized to do this operation"), 401)
-                                            } else {
-                                                if request.method() == &Method::Post {
-                                                    let mut content = String::new();
-                                                    request.as_reader().read_to_string(&mut content).unwrap();
-                                                    let json: Value = content.parse().unwrap();
-
-                                                    ChannelId(1097551957570375750).send_message(ctx, |m| {
-                                                        m.embed(|embed| {
-                                                            embed
-                                                                .title("<:pyrite:1112834249385578517> New Vote!")
-                                                                .description(format!("<:arrow:1068604670764916876> <@{}> Just Voted **__Pyrite Bot__** on [Top.gg](https://top.gg/bot/1008400801628164096)! They have now received the <@&1024001432078258216> Role! You can vote too to get it!\n\n:heart: __Thank you for voting Pyrite Bot__", json["user"].as_str().unwrap_or("1023959748535664721")))
-                                                                .colour(0x2b2d31)
-                                                                .thumbnail("https://i.imgur.com/bbH7fEf.png")
-                                                                .footer(|footer| footer.text("Pyrite Bot Support").icon_url("https://i.imgur.com/bbH7fEf.png"))
-                                                        })
-                                                    }).await?;
-                                                    GuildId(1008365644636495953)
-                                                        .member(ctx, json["user"].as_u64().unwrap_or(807705107852558386))
-                                                        .await?
-                                                        .add_role(ctx, 1024001432078258216)
-                                                        .await?;
-                                                    Response::with_status_code(Response::from_string(String::new()), 201)
-                                                } else {
-                                                    Response::with_status_code(
-                                                        Response::from_string(String::new()),
-                                                        405,
-                                                    )
-                                                }
-                                            }
-
-                                        },
-                                        None => Response::with_status_code(Response::from_string("You're not authorized to do this operation"), 401)
-                                    }
-                                },
-                                Err(_) => Response::with_status_code(Response::from_string("You're not authorized to do this operation"), 401)
-                            }
-
-                        },
-                        _ => Response::with_status_code(
-                            Response::from_string("Method Not Allowed"),
-                            405,
-                        ),
-                    };
-
-                    let _ = request.respond(response);
-                }
-
                 ctx.set_activity(Activity::watching(format!(
                     "{} servers",
-                    ready.user.guilds(&ctx.http).await?.len()
+                    ready.user.guilds(&ctx).await?.len()
                 )))
                 .await;
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+
                 Ok(Data {})
             })
         })
@@ -168,7 +117,56 @@ async fn main() {
         .intents(
             serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT,
         )
-        .run()
-        .await
-        .unwrap();
+        .build();
+
+    let fwork = framework.await.unwrap();
+    let http = fwork.client().cache_and_http.clone();
+
+    tokio::task::spawn(async move {
+        let app = Router::new()
+            .route("/", get(|| async { "Bot hosting running correctly!" }))
+            .route("/vote", post(move |auth, data| send_vote(auth, data, http)));
+
+        axum::Server::bind(&"0.0.0.0:3000".parse().expect("Failed to parse host"))
+            .serve(app.into_make_service())
+            .await
+            .expect("Failed to start server");
+    });
+
+    fwork.start().await.expect("Failed to start bot");
+}
+
+async fn send_vote(
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Json(data): Json<ReqData>,
+    ctx: Arc<CacheAndHttp>,
+) -> (StatusCode, String) {
+    if auth.token() != var("TOPGG_AUTH").unwrap_or(String::new()) {
+        (
+            StatusCode::UNAUTHORIZED,
+            format!("You're not authorized to do this operation"),
+        )
+    } else {
+        let _ = ChannelId(1097551957570375750).send_message(&ctx.http, |m| {
+            m.embed(|embed| {
+                embed
+                    .title("<:pyrite:1112834249385578517> New Vote!")
+                    .description(format!("<:arrow:1068604670764916876> <@{}> Just Voted **__Pyrite Bot__** on [Top.gg](https://top.gg/bot/1008400801628164096)! They have now received the <@&1024001432078258216> Role! You can vote too to get it!\n\n:heart: __Thank you for voting Pyrite Bot__", data.user))
+                    .colour(0x2b2d31)
+                    .thumbnail("https://i.imgur.com/bbH7fEf.png")
+                    .footer(|footer| footer.text("Pyrite Bot Support").icon_url("https://i.imgur.com/bbH7fEf.png"))
+            })
+        }).await;
+        let _ = GuildId(1008365644636495953)
+            .member(
+                &ctx.http,
+                data.user.parse::<u64>().unwrap_or(807705107852558386),
+            )
+            .await
+            .expect("Member not found")
+            .add_role(&ctx.http, 1024001432078258216)
+            .await;
+
+        (StatusCode::OK, String::new())
+    }
 }
