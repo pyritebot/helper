@@ -103,11 +103,8 @@ async fn main() {
             Box::pin(async move {
                 println!("\x1b[1m\x1b[32mReady\x1b[0m as {}", ready.user.tag());
 
-                ctx.set_activity(Activity::watching(format!(
-                    "{} servers",
-                    ready.user.guilds(&ctx).await?.len()
-                )))
-                .await;
+                ctx.set_activity(Activity::listening(format!("to -- prefix")))
+                    .await;
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
                 Ok(Data {})

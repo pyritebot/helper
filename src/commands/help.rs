@@ -40,7 +40,7 @@ pub async fn help(
             ctx.send(|m| {
                 m.embed(|embed| {
                     embed
-                        .colour(Colour::ORANGE)
+                        .colour(0x7DD956)
                         .title("Help")
                         .fields(
                             commands
