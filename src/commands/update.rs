@@ -21,7 +21,7 @@ struct UpdateModal {
 }
 
 /// Add an update!
-#[poise::command(slash_command)]
+#[poise::command(slash_command, required_permissions = "ADMINISTRATOR")]
 pub async fn update(ctx: ApplicationContext<'_>) -> Result<(), Error> {
     let data = UpdateModal::execute(ctx).await?;
 
