@@ -164,6 +164,8 @@ async fn send_vote(
             .add_role(&ctx.http, 1024001432078258216)
             .await;
 
+        println!("New Vote from {}", data.user);
+
         (StatusCode::OK, String::new())
     }
 }
