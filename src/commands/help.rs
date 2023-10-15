@@ -22,8 +22,8 @@ pub async fn help(
 
                     match c {
                         Some(x) => embed
-                            .colour(Colour::ORANGE)
-                            .title(name)
+                            .colour(0x7dd956)
+                            .title(format!("{}{name}", ctx.prefix()))
                             .description(x.description.as_deref().unwrap_or("No Description"))
                             .footer(|footer| footer.text(BOT_NAME)),
                         None => embed
@@ -40,7 +40,7 @@ pub async fn help(
             ctx.send(|m| {
                 m.embed(|embed| {
                     embed
-                        .colour(0x7DD956)
+                        .colour(0x7dd956)
                         .title("Help")
                         .fields(
                             commands

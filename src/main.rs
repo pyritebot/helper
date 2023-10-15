@@ -136,7 +136,7 @@ async fn main() {
 async fn send_vote(
     TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
     Json(data): Json<ReqData>,
-    ctx: Arc<CacheAndHttp>,
+    http: Arc<CacheAndHttp>,
 ) -> (StatusCode, String) {
     if auth.token() != var("TOPGG_AUTH").unwrap_or(String::new()) {
         (
@@ -144,7 +144,7 @@ async fn send_vote(
             format!("You're not authorized to do this operation"),
         )
     } else {
-        let _ = ChannelId(1097551957570375750).send_message(&ctx.http, |m| {
+        ChannelId(1097551957570375750).send_message(&http.http, |m| {
             m.embed(|embed| {
                 embed
                     .title("<:pyrite:1112834249385578517> New Vote!")
@@ -153,16 +153,18 @@ async fn send_vote(
                     .thumbnail("https://i.imgur.com/bbH7fEf.png")
                     .footer(|footer| footer.text("Pyrite Bot Support").icon_url("https://i.imgur.com/bbH7fEf.png"))
             })
-        }).await;
-        let _ = GuildId(1008365644636495953)
+        }).await.expect("There was an error sending the vote!");
+
+        GuildId(1008365644636495953)
             .member(
-                &ctx.http,
+                &http.http,
                 data.user.parse::<u64>().unwrap_or(807705107852558386),
             )
             .await
             .expect("Member not found")
-            .add_role(&ctx.http, 1024001432078258216)
-            .await;
+            .add_role(&http.http, 1024001432078258216)
+            .await
+            .expect("There was an error adding the role");
 
         println!("New Vote from {}", data.user);
 
